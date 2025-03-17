@@ -328,7 +328,7 @@ export const sell = async (
     rawAccount: MinimalTokenAccountData,
     poolKeys: LiquidityPoolKeysV4,
     tokenAmount: number,
-): Promise<void> => {
+) => {
 
     try {
         let messageV0: any;
@@ -407,7 +407,7 @@ export const sell = async (
         const txSig = await executeJitoTx1([transaction], keypair, "confirmed");
         console.log(`✅ Successfully swapped tokens. Transaction Signature: ${txSig}`);
 
-
+        return txSig;
     } catch (error) {
         console.log(error)
     }

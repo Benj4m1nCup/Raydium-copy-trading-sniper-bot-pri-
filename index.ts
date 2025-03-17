@@ -16,12 +16,13 @@ import { getAssociatedTokenAddress, NATIVE_MINT } from "@solana/spl-token";
 import { getBuyTxWithJupiter, getSellTxWithJupiter } from "./utils/swapOnlyAmm";
 import { execute, getTokenMarketCap } from "./utils/legacy";
 import { executeJitoTx } from "./utils/jito";
-import { buyTokenRaydium, buyTokenRaydiumWithMint, sellTokenRaydium, sellTokenRaydiumWithMint } from "./raydium/utils/instructions";
+import { buyTokenRaydium, buyTokenRaydiumWithMint, sellToken } from "./raydium/utils/instructions";
 import { GRPC_ENDPOINT, PUMPFUN_PROGRAM_ID, RARDIUM_PROGRAM_ID, SOL_MINT, TARGET_ADDRESS, RPC_ENDPOINT, PHOTON_PROGRAM_ID, METEORA_PROGRAM_ID } from "./constants"
 import { logger } from "./utils";
 import { init, sellWithJupiter } from "./raydium/transaction/transaction";
 
 import { fetchMarketId } from "./raydium/utils/poolAll";
+import { sleep } from "./utils/commonFunc";
 
 dotenv.config()
 
@@ -324,32 +325,30 @@ async function handleData(data: SubscribeUpdate, stream: ClientDuplexStream<Subs
 
                     buyResult = await buyTokenRaydium(mintAddress, wsolChange, poolId, marketId, tokenDecimal);
 
-                    // if(buyResult){
+                    if (buyResult) {
 
 
-                    //         console.log("buyprice===============>", buyResult.tokenBuyPrice);
+                        console.log("buyprice===============>", buyResult.tokenBuyPrice);
 
-                    //         let sellSig = await sellToken(poolstate, buyResult.solBuyPrice, buyResult.poolKeys)
-                    //         if (sellSig) {
-                    //           console.log("Sell Token ")
-                    //         } else {
-                    //           await sellToken(poolstate, buyResult.solBuyPrice, buyResult.poolKeys)
-                    //         }
 
-                    // }
+                        let sellSig = await sellToken(buyResult.tokenBuyPrice, buyResult.poolKey)
+                        if (sellSig) {
+                            console.log("Sell Token ")
+                        } else {
+                            await sellToken(buyResult.tokenBuyPrice, buyResult.poolKey)
+                        }
+
+                    }
+                    await sellWithJupiter(new PublicKey(mintAddress))
+                    await sleep(500)
+                    await sellWithJupiter(new PublicKey(mintAddress))
+                    await init()
 
                 } catch (error) {
                     console.log(error)
                 }
 
             }
-
-
-
-
-
-
-
         }
         isStopped = false
     } catch (error) {
