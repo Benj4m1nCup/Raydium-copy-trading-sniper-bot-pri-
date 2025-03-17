@@ -7,14 +7,15 @@ import { LiquidityPoolKeysV4, LiquidityStateV4, MARKET_STATE_LAYOUT_V3 } from "@
 import { buy, sell } from "../transaction/transaction";
 import bs58 from "bs58"
 import { logger } from "../../utils";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { getPoolState } from "./getPoolInfo";
+import { resourceUsage } from "process";
 
 const solanaConnection = new Connection(RPC_ENDPOINT, 'confirmed');
 const secretKey = bs58.decode(PRIVATE_KEY);
 const keypair = Keypair.fromSecretKey(secretKey);
 
-export async function buyTokenRaydium(tokenMint: string, solAmount: number, poolId: string, marketId: string, tokenDecimal: number) {
+export async function buyTokenRaydium(tokenMint: string, solAmount: number, poolId: string, marketId: string, tokenDecimal: number): Promise<{ tokenBuyPrice: number | null; poolKey: any } | null> {
     try {
         logger.info('Start getting poolKey');
         console.log("solAmount=====>", solAmount)
@@ -24,17 +25,23 @@ export async function buyTokenRaydium(tokenMint: string, solAmount: number, pool
 
         if (!poolKey) {
             console.log("poolKey is null. Exiting function.");
-            return;
+            return null;
         }
 
         logger.info('Start buy');
 
-        await buy(new PublicKey(tokenMint), poolKey, solAmount);
+        let tokenBuyPrice = await buy(new PublicKey(tokenMint), poolKey, solAmount);
 
-        logger.info('Finish buy');
+        if (tokenBuyPrice) {
+            logger.info('Finish buy');
+            return { tokenBuyPrice, poolKey };
+        } else {
+            return null;
+        }
 
     } catch (error) {
         console.log(error)
+        return null;
     }
 }
 
@@ -71,7 +78,7 @@ export async function sellTokenRaydium(tokenMint: string, poolId: string, market
 
 
 
-export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string, tokenDecimal: number, solAmount: number) {
+export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string, tokenDecimal: number, solAmount: number): Promise<{ tokenBuyPrice: number | null; poolKey: any } | null> {
     try {
         logger.info('Start getting poolKey');
 
@@ -81,7 +88,7 @@ export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string,
 
         if (!poolState) {
             console.log("PoolState is null. Exiting function.");
-            return;
+            return null;
         }
 
         let poolKey = await makeDerivePoolKeys(new PublicKey(poolId), poolState, new PublicKey(tokenMint), tokenDecimal);
@@ -90,17 +97,25 @@ export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string,
 
         if (!poolKey) {
             console.log("poolKey is null. Exiting function.");
-            return;
+            return null;
         }
 
         logger.info('Start buy');
 
-        await buy(new PublicKey(tokenMint), poolKey, solAmount);
+        let tokenBuyPrice = await buy(new PublicKey(tokenMint), poolKey, solAmount);
 
-        logger.info('Finish buy');
+        if (tokenBuyPrice) {
+            logger.info('Finish buy');
+            return { tokenBuyPrice, poolKey };
+        } else {
+            return null;
+
+        }
+
 
     } catch (error) {
         console.log(error)
+        return null
     }
 }
 
@@ -141,3 +156,83 @@ export async function sellTokenRaydiumWithMint(tokenMint: string, poolId: string
         console.log("Sell Token Error:", error);
     }
 }
+
+
+// export async function sellToken(poolState: LiquidityStateV4, buyprice: number, poolKeys: LiquidityPoolKeysV4) {
+//     try {
+  
+//       if (!AUTO_SELL) {
+//         logger.info("Auto sell is disabled");
+//         return;
+//       }
+  
+//       let retries = 0;
+//       let startTime = Date.now();
+//       let mintAddress = poolState.baseMint;
+//       const ata = getAssociatedTokenAddressSync(mintAddress, keypair.publicKey);
+  
+//       while (true) {
+//         try {
+//           const poolBaseTokenAccountInfo = await getAccount(solanaConnection, poolState.baseVault, "processed");
+//           const poolBaseTokenBalance = poolBaseTokenAccountInfo.amount;
+//           // logger.info("🚀 ~ Pool base tokenInfo:", poolBaseTokenAccountInfo);
+//           logger.info("🚀 ~ Pool base tokenBalance:", poolBaseTokenBalance);
+  
+//           const poolQuateTokenAccountInfo = await getAccount(solanaConnection, poolState.quoteVault, "processed");
+//           const poolQuateTokenBalance = poolQuateTokenAccountInfo.amount;
+//           // logger.info("🚀 ~ Pool quate tokenInfo:", poolQuateTokenAccountInfo);
+//           logger.info("🚀 ~ Pool quate tokenBalance:", poolQuateTokenBalance);
+  
+//           const poolTokenPrice = Number(poolQuateTokenBalance) / Number(poolBaseTokenBalance);
+//           logger.info("🚀 ~ poolTokenPrice:", poolTokenPrice);
+  
+//           const priceChange = ((poolTokenPrice - buyprice) / buyprice) * 100;
+//           logger.info("priceChange =====>", priceChange);
+  
+//           logger.info(`Current price: ${poolTokenPrice}, Buy price: ${buyprice}, Price change: ${priceChange.toFixed(3)}%`);
+  
+//           if (priceChange >= TAKE_PROFIT) {
+//             logger.info("Take profit condition met");
+//             break;
+//           }
+//           if (priceChange <= -STOP_LOSS) {
+//             logger.info("Stop loss condition met");
+//             break;
+//           }
+//           if (priceChange <= -SKIP_SELLING_IF_LOST_MORE_THAN) {
+//             logger.info(`Skip selling, price drop exceeded threshold: ${SKIP_SELLING_IF_LOST_MORE_THAN}%`);
+//             return;
+//           }
+//           if (PRICE_CHECK_DURATION && Date.now() - startTime > PRICE_CHECK_DURATION) {
+//             logger.info("Price check duration exceeded, proceeding to sell");
+//             break;
+//           }
+//           await new Promise(resolve => setTimeout(resolve, PRICE_CHECK_INTERVAL));
+//         } catch (error) {
+//           logger.info("Error in price monitoring", error);
+//         }
+//       }
+  
+//       while (retries < MAX_SELL_RETRIES) {
+//         try {
+//           logger.info(`Attempt ${retries + 1} to sell token`);
+//           let sellSig = await sell(wallet.publicKey, { mint: mintAddress, address: ata }, poolState, poolKeys);
+//           if (sellSig) {
+//             logger.info("Token sold finish");
+//             return true;
+//           }
+//           break;
+//         } catch (err) {
+//           retries++;
+//           logger.info(`Sell attempt failed (${retries}/${MAX_SELL_RETRIES})`, err);
+//           if (retries >= MAX_SELL_RETRIES) {
+//             logger.info("Max sell retries reached, aborting");
+//           }
+//         }
+//       }
+//       logger.info("sell token")
+  
+//     } catch (error) {
+//       console.error(error)
+//     }
+//   }

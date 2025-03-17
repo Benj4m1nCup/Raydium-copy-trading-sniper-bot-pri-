@@ -280,6 +280,42 @@ export async function buy(
 
         await executeJitoTx([versionedTx], keypair, 'processed', latestBlockhash);
 
+
+        await sleep(2000)
+        const INTERVAL_TIME = 50; // Interval for checking (10ms)
+        const MAX_WAIT_TIME = 2000; // Maximum wait time (5 seconds)
+        const startTime = Date.now(); // Record the start time
+
+        while (true) {
+            // Get the current time to check against MAX_WAIT_TIME
+            const currentTime = Date.now();
+
+            // Exit the loop and throw an error if the maximum time is exceeded
+            if (currentTime - startTime > MAX_WAIT_TIME) {
+                logger.info("Token balance is not updated within the maximum wait time");
+                throw new Error("Token balance failed to update within the specified time.");
+            }
+
+            // Fetch token account info
+            const tokenAta = await getAssociatedTokenAddress(tokenMint, keypair.publicKey);
+            const tokenAccountInfo = await getAccount(solanaConnection, tokenAta, "processed");
+            logger.info("🚀 ~ tokenInfo:", tokenAccountInfo);
+            logger.info("🚀 ~ tokenBalance:", tokenAccountInfo.amount);
+
+            // Check if token amount is non-zero
+            if (Number(tokenAccountInfo?.amount) !== 0) {
+                logger.info("------------------------- Buy Token successful ------------------------");
+                const solBuyPrice = Number(QUOTE_AMOUNT) / Number(tokenAccountInfo.amount) * 10 ** 9;
+
+                logger.info("Token balance is updated successfully");
+                logger.info("solBuyPrice ============>", solBuyPrice);
+                return solBuyPrice; // Return result when amount != 0
+            }
+
+            // Wait for the specified interval before checking again
+            await new Promise(resolve => setTimeout(resolve, INTERVAL_TIME));
+        }
+
     } catch (error) {
         logger.error(error);
         return null;

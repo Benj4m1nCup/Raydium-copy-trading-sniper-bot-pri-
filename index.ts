@@ -288,6 +288,8 @@ async function handleData(data: SubscribeUpdate, stream: ClientDuplexStream<Subs
 
                     let marketId: string = '';
                     let poolId: string = '';
+                    let buyResult;
+
 
                     if (transaction.transaction?.message?.accountKeys.length == 21) {
 
@@ -312,98 +314,41 @@ async function handleData(data: SubscribeUpdate, stream: ClientDuplexStream<Subs
 
                         poolId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[5]!));
                         console.log("poolbuy=========>", poolId)
-                        await buyTokenRaydiumWithMint(mintAddress, poolId, tokenDecimal, wsolChange);
+                        buyResult = await buyTokenRaydiumWithMint(mintAddress, poolId, tokenDecimal, wsolChange);
 
                     } else {
                         poolId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[4]!));
                         console.log("poolbuy=========>", poolId)
-                        await buyTokenRaydiumWithMint(mintAddress, poolId, tokenDecimal, wsolChange);
+                        buyResult = await buyTokenRaydiumWithMint(mintAddress, poolId, tokenDecimal, wsolChange);
                     }
 
-                    await buyTokenRaydium(mintAddress, wsolChange, poolId, marketId, tokenDecimal)
+                    buyResult = await buyTokenRaydium(mintAddress, wsolChange, poolId, marketId, tokenDecimal);
+
+                    // if(buyResult){
+
+
+                    //         console.log("buyprice===============>", buyResult.tokenBuyPrice);
+
+                    //         let sellSig = await sellToken(poolstate, buyResult.solBuyPrice, buyResult.poolKeys)
+                    //         if (sellSig) {
+                    //           console.log("Sell Token ")
+                    //         } else {
+                    //           await sellToken(poolstate, buyResult.solBuyPrice, buyResult.poolKeys)
+                    //         }
+
+                    // }
+
                 } catch (error) {
                     console.log(error)
                 }
-            } else if (tokenChange > 0) {
 
-                try {
-
-
-
-                    console.log("======================== Sell token transaction to Raydium======================== ")
-                    saveToJSONFile("Raydium-sell.json", data);
-
-
-
-                    // let account0 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[0]!));
-                    // console.log("account0=========>", account0)
-                    // let account1 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[1]!));
-                    // console.log("account1=========>", account1)
-                    // let account2 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[2]!));
-                    // console.log("account2=========>", account2)
-                    // let account3 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[3]!));
-                    // console.log("account3=========>", account3)
-                    // let account4 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[4]!));
-                    // console.log("account4=========>", account4)
-                    // let account5 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[5]!));
-                    // console.log("account5=========>", account5)
-                    // let account6 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[6]!));
-                    // console.log("account6=========>", account6)
-                    // let account7 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[7]!));
-                    // console.log("account7=========>", account7)
-                    // let account8 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[8]!));
-                    // console.log("account8=========>", account8)
-                    // let account9 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[9]!));
-                    // console.log("account9=========>", account9)
-                    // let account10 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[10]!));
-                    // console.log("account10=========>", account10)
-                    // // let account11 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[11]!));
-                    // // console.log("account11=========>", account11)
-                    // // let account12 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[12]!));
-                    // // console.log("account12=========>", account12)
-                    // // let account13 = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[13]!));
-                    // // console.log("account13=========>", account13)
-
-                    let tokenRaydiumSellAmount = tokenChange;
-                    console.log("tokenRaydiumSellAmount=================>", tokenRaydiumSellAmount);
-
-
-
-                    let poolId: string = '';
-                    let marketId: string = '';
-
-                    if (transaction.transaction?.message?.accountKeys.length == 18) {
-
-                        poolId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[1]!));
-                        console.log("poolId=========>", poolId)
-
-                        marketId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[6]!));
-                        console.log("marketId=========>", marketId)
-
-                    } else if (transaction.transaction?.message?.accountKeys.length == 27) {
-
-                        poolId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[4]!));
-                        console.log("poolId=========>", poolId)
-
-                        marketId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[9]!));
-                        console.log("marketId=========>", marketId)
-
-                    } else if (transaction.transaction?.message?.accountKeys.length == 11) {
-                        poolId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[5]!));
-                        console.log("poolbuy=========>", poolId)
-                        await sellTokenRaydiumWithMint(mintAddress, poolId, tokenDecimal, wsolChange);
-                    } else {
-                        poolId = bs58.encode(Buffer.from(transaction.transaction?.message?.accountKeys[4]!));
-                        console.log("poolbuy=========>", poolId)
-                        await buyTokenRaydiumWithMint(mintAddress, poolId, tokenDecimal, wsolChange);
-                    }
-
-                    await sellTokenRaydium(mintAddress, poolId, marketId, tokenDecimal, tokenChange)
-                    await sellWithJupiter(new PublicKey(mintAddress))
-                } catch (error) {
-                    console.log(error)
-                }
             }
+
+
+
+
+
+
 
         }
         isStopped = false
