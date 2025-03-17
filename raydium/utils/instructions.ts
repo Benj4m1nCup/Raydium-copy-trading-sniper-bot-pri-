@@ -12,39 +12,39 @@ import dotenv from 'dotenv'
 import {
     TAKE_PROFIT,
     STOP_LOSS,
-    SKIP_SELLING_IF_LOST_MORE_THAN,
     MAX_SELL_RETRIES,
     PRICE_CHECK_INTERVAL,
-    PRICE_CHECK_DURATION
+    PRICE_CHECK_DURATION,
+    LOSS_DURARTION
 } from "../../constants"
 
 dotenv.config()
-const solanaConnection = new Connection(RPC_ENDPOINT, 'confirmed');
+const solanaConnection = new Connection(RPC_ENDPOINT, 'processed');
 const secretKey = bs58.decode(PRIVATE_KEY);
 const keypair = Keypair.fromSecretKey(secretKey);
 
 const AUTO_SELL = process.env.AUTO_SELL === 'true';
 
-export async function buyTokenRaydium(tokenMint: string, solAmount: number, poolId: string, marketId: string, tokenDecimal: number): Promise<{ tokenBuyPrice: number | null; poolKey: any } | null> {
+export async function buyTokenRaydium(tokenMint: string, solAmount: number, poolId: string, marketId: string, tokenDecimal: number): Promise<{ tokenBuyPrice: number | null; poolKeys: any } | null> {
     try {
         logger.info('Start getting poolKey');
         console.log("solAmount=====>", solAmount)
-        let poolKey = await buyDerivePoolKeys(new PublicKey(poolId), new PublicKey(marketId), new PublicKey(tokenMint), tokenDecimal);
-        console.log("poolKey========>", poolKey);
+        let poolKeys = await buyDerivePoolKeys(new PublicKey(poolId), new PublicKey(marketId), new PublicKey(tokenMint), tokenDecimal);
+        console.log("poolKey========>", poolKeys);
         logger.info('Finish getting poolKey');
 
-        if (!poolKey) {
+        if (!poolKeys) {
             console.log("poolKey is null. Exiting function.");
             return null;
         }
 
         logger.info('Start buy');
 
-        let tokenBuyPrice = await buy(new PublicKey(tokenMint), poolKey, solAmount);
+        let tokenBuyPrice = await buy(new PublicKey(tokenMint), poolKeys, solAmount);
 
         if (tokenBuyPrice) {
             logger.info('Finish buy');
-            return { tokenBuyPrice, poolKey };
+            return { tokenBuyPrice, poolKeys };
         } else {
             return null;
         }
@@ -181,6 +181,8 @@ export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) 
         let mintAddress = poolKey.baseMint;
         const ata = getAssociatedTokenAddressSync(mintAddress, keypair.publicKey);
         const tokenBalance = await solanaConnection.getTokenAccountBalance(ata);
+        let lossCounter = 0;
+        let profitCounter = 0;
 
         while (true) {
             try {
@@ -210,10 +212,20 @@ export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) 
                     logger.info("Stop loss condition met");
                     break;
                 }
-                if (priceChange <= -SKIP_SELLING_IF_LOST_MORE_THAN) {
-                    logger.info(`Skip selling, price drop exceeded threshold: ${SKIP_SELLING_IF_LOST_MORE_THAN}%`);
-                    return;
+                if (priceChange < 0) {
+                    lossCounter++;
                 }
+                if (priceChange > 0) {
+                    profitCounter++;
+                }
+                if (lossCounter > LOSS_DURARTION) {
+                    console.log("Token Price wont be rised, proceeding to sell")
+                    break;
+                }
+                // if (priceChange <= -SKIP_SELLING_IF_LOST_MORE_THAN) {
+                //     logger.info(`Skip selling, price drop exceeded threshold: ${SKIP_SELLING_IF_LOST_MORE_THAN}%`);
+                //     return;
+                // }
                 if (PRICE_CHECK_DURATION && Date.now() - startTime > PRICE_CHECK_DURATION) {
                     logger.info("Price check duration exceeded, proceeding to sell");
                     break;
