@@ -199,7 +199,12 @@ export async function sellToken(buyprice: number, poolKeys: LiquidityPoolKeysV4)
                 // logger.info("🚀 ~ Pool quate tokenInfo:", poolQuateTokenAccountInfo);
                 logger.info("🚀 ~ Pool quate tokenBalance:", poolQuateTokenBalance);
 
-                const poolTokenPrice = Number(poolQuateTokenBalance) / Number(poolBaseTokenBalance);
+                let poolTokenPrice: number;
+                if (poolKeys.quoteMint.toString() == SOL_MINT) {
+                    poolTokenPrice = Number(poolQuateTokenBalance) / Number(poolBaseTokenBalance);
+                } else {
+                    poolTokenPrice = Number(poolBaseTokenBalance) / Number(poolQuateTokenBalance);
+                }
                 logger.info("🚀 ~ poolTokenPrice:", poolTokenPrice);
 
                 const priceChange = ((poolTokenPrice - buyprice) / buyprice) * 100;
