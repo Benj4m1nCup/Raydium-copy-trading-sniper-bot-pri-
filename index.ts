@@ -178,6 +178,7 @@ async function handleData(data: SubscribeUpdate, stream: ClientDuplexStream<Subs
             isStopped = true;
             console.log("======================== Raydium trading transaction ======================== ");
 
+            saveToJSONFile("Raydium-Transactions.json", data);
 
             // Filter out SOL mint address and get the first non-SOL token mint
             const mintAddress = transaction.meta.preTokenBalances.find(

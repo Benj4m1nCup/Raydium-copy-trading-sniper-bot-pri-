@@ -1,7 +1,7 @@
 
 import { Liquidity, LiquidityPoolKeysV4, LiquidityStateV4, Token, TokenAmount, Percent } from '@raydium-io/raydium-sdk';
 import { ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { createAssociatedTokenAccountIdempotentInstruction, createCloseAccountInstruction, createSyncNativeInstruction, getAccount, getAssociatedTokenAddress, getAssociatedTokenAddressSync, MintLayout, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { Account, createAssociatedTokenAccountIdempotentInstruction, createCloseAccountInstruction, createSyncNativeInstruction, getAccount, getAssociatedTokenAddress, getAssociatedTokenAddressSync, MintLayout, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import Client from '@triton-one/yellowstone-grpc';
 import dotenv from 'dotenv'
 import bs58 from 'bs58';
@@ -28,6 +28,7 @@ import {
 import { sendAndConfirmTransaction } from '@solana/web3.js';
 import { executeJitoTx1 } from '../../utils/selljito';
 import { getSellTxWithJupiter } from '../../utils';
+import { sendBundle } from '../../utils/liljit';
 
 dotenv.config()
 
@@ -279,10 +280,10 @@ export async function buy(
         logger.info('Start send and confirm transaction');
 
         await executeJitoTx([versionedTx], keypair, 'processed', latestBlockhash);
+        // await sendBundle([versionedTx], keypair, 'processed', latestBlockhash);
 
-
-        await sleep(2000)
-        const INTERVAL_TIME = 50; // Interval for checking (10ms)
+        // await sleep(2000)
+        const INTERVAL_TIME = 50; // Interval for checking (50ms)
         const MAX_WAIT_TIME = 2000; // Maximum wait time (5 seconds)
         const startTime = Date.now(); // Record the start time
 
@@ -305,7 +306,7 @@ export async function buy(
             // Check if token amount is non-zero
             if (Number(tokenAccountInfo?.amount) !== 0) {
                 logger.info("------------------------- Buy Token successful ------------------------");
-                const solBuyPrice = Number(QUOTE_AMOUNT) / Number(tokenAccountInfo.amount) * 10 ** 9;
+                const solBuyPrice = Number(BUY_LIMIT) / Number(tokenAccountInfo.amount) * 10 ** 9;
 
                 logger.info("Token balance is updated successfully");
                 logger.info("solBuyPrice ============>", solBuyPrice);
@@ -332,17 +333,42 @@ export const sell = async (
 
     try {
         let messageV0: any;
-        logger.info('get latestBlockhash ata');
-        const latestBlockhash = await solanaConnection.getLatestBlockhash();
-        logger.info('finish latestBlockhash ata');
 
-        logger.info('start building buy transaction');
+        logger.info('start building sell transaction');
 
-        let ata: PublicKey;
+        let tokenAta: PublicKey;
+        let tokenAccountInfo: Account;
 
-        ata = rawAccount.address;
 
-        const tokenAccountInfo = await getAccount(solanaConnection, ata);
+        const INTERVAL_TIME = 50; // Interval for checking (50ms)
+        const MAX_WAIT_TIME = 2000; // Maximum wait time (5 seconds)
+        const startTime = Date.now(); // Record the start time
+
+        while (true) {
+            // Get the current time to check against MAX_WAIT_TIME
+            const currentTime = Date.now();
+
+            // Exit the loop and throw an error if the maximum time is exceeded
+            if (currentTime - startTime > MAX_WAIT_TIME) {
+                logger.info("Token balance is not updated within the maximum wait time");
+                throw new Error("Token balance failed to update within the specified time.");
+            }
+
+            // Fetch token account info
+            tokenAta = await getAssociatedTokenAddress(poolKeys.baseMint, keypair.publicKey);
+            tokenAccountInfo = await getAccount(solanaConnection, tokenAta, "processed");
+            logger.info("🚀 ~ tokenInfo:", tokenAccountInfo);
+            logger.info("🚀 ~ tokenBalance:", tokenAccountInfo.amount);
+
+            if (Number(tokenAccountInfo?.amount) !== 0) {
+                break;
+            }
+
+            // Wait for the specified interval before checking again
+            await new Promise(resolve => setTimeout(resolve, INTERVAL_TIME));
+        }
+
+
 
         const realTokenBalance = Math.floor(Number(tokenAccountInfo.amount) * (SELL_PERCENT / 100));
 
@@ -362,7 +388,7 @@ export const sell = async (
                 poolKeys: poolKeys!,
                 userKeys: {
                     tokenAccountOut: quoteTokenAssociatedAddress,
-                    tokenAccountIn: ata,
+                    tokenAccountIn: tokenAta,
                     owner: wallet.publicKey,
                 },
                 amountIn: tokenBalance,
@@ -370,6 +396,10 @@ export const sell = async (
             },
             poolKeys!.version,
         );
+
+        logger.info('get latestBlockhash tokenAta');
+        const latestBlockhash = await solanaConnection.getLatestBlockhash();
+        logger.info('finish latestBlockhash ata');
 
         if (SELL_PERCENT == 100) {
 
@@ -380,7 +410,7 @@ export const sell = async (
                     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: SET_COMPUTE_UNITPRICE }),
                     ComputeBudgetProgram.setComputeUnitLimit({ units: SET_COMPUTE_UNIT_LIMIT }),
                     ...innerTransaction.instructions,
-                    createCloseAccountInstruction(ata, wallet.publicKey, wallet.publicKey),
+                    createCloseAccountInstruction(tokenAta, wallet.publicKey, wallet.publicKey),
                 ],
             }).compileToV0Message();
         } else {

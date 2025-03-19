@@ -17,6 +17,7 @@ import {
     PRICE_CHECK_DURATION,
     LOSS_DURARTION
 } from "../../constants"
+import { sleep } from "../../utils/commonFunc";
 
 dotenv.config()
 const solanaConnection = new Connection(RPC_ENDPOINT, 'processed');
@@ -88,7 +89,7 @@ export async function buyTokenRaydium(tokenMint: string, solAmount: number, pool
 
 
 
-export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string, tokenDecimal: number, solAmount: number): Promise<{ tokenBuyPrice: number | null; poolKey: any } | null> {
+export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string, tokenDecimal: number, solAmount: number): Promise<{ tokenBuyPrice: number | null; poolKey: LiquidityPoolKeysV4 | null } | null> {
     try {
         logger.info('Start getting poolKey');
 
@@ -168,7 +169,7 @@ export async function buyTokenRaydiumWithMint(tokenMint: string, poolId: string,
 // }
 
 
-export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) {
+export async function sellToken(buyprice: number, poolKeys: LiquidityPoolKeysV4) {
     try {
 
         if (!AUTO_SELL) {
@@ -178,7 +179,7 @@ export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) 
 
         let retries = 0;
         let startTime = Date.now();
-        let mintAddress = poolKey.baseMint;
+        let mintAddress = poolKeys.baseMint;
         const ata = getAssociatedTokenAddressSync(mintAddress, keypair.publicKey);
         const tokenBalance = await solanaConnection.getTokenAccountBalance(ata);
         let lossCounter = 0;
@@ -186,12 +187,14 @@ export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) 
 
         while (true) {
             try {
-                const poolBaseTokenAccountInfo = await getAccount(solanaConnection, poolKey.baseVault, "processed");
+                console.log("poolKeys.baseVault=>", poolKeys.baseVault);
+                console.log("poolKeys.quoteVault=>", poolKeys.quoteVault);
+                const poolBaseTokenAccountInfo = await getAccount(solanaConnection, poolKeys.baseVault, "processed");
                 const poolBaseTokenBalance = poolBaseTokenAccountInfo.amount;
                 // logger.info("🚀 ~ Pool base tokenInfo:", poolBaseTokenAccountInfo);
                 logger.info("🚀 ~ Pool base tokenBalance:", poolBaseTokenBalance);
 
-                const poolQuateTokenAccountInfo = await getAccount(solanaConnection, poolKey.quoteVault, "processed");
+                const poolQuateTokenAccountInfo = await getAccount(solanaConnection, poolKeys.quoteVault, "processed");
                 const poolQuateTokenBalance = poolQuateTokenAccountInfo.amount;
                 // logger.info("🚀 ~ Pool quate tokenInfo:", poolQuateTokenAccountInfo);
                 logger.info("🚀 ~ Pool quate tokenBalance:", poolQuateTokenBalance);
@@ -210,15 +213,18 @@ export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) 
                 }
                 if (priceChange <= -STOP_LOSS) {
                     logger.info("Stop loss condition met");
+                    await sleep(5000);
                     break;
                 }
                 if (priceChange < 0) {
                     lossCounter++;
+                    profitCounter = 0;
                 }
                 if (priceChange > 0) {
                     profitCounter++;
+                    lossCounter = 0;
                 }
-                if (lossCounter > LOSS_DURARTION) {
+                if (lossCounter * PRICE_CHECK_INTERVAL > LOSS_DURARTION) {
                     console.log("Token Price wont be rised, proceeding to sell")
                     break;
                 }
@@ -239,7 +245,7 @@ export async function sellToken(buyprice: number, poolKey: LiquidityPoolKeysV4) 
         while (retries < MAX_SELL_RETRIES) {
             try {
                 logger.info(`Attempt ${retries + 1} to sell token`);
-                let sellSig = await sell({ mint: new PublicKey(poolKey.baseMint), address: ata }, poolKey, Number(tokenBalance.value.amount));
+                let sellSig = await sell({ mint: new PublicKey(poolKeys.baseMint), address: ata }, poolKeys, Number(tokenBalance.value.amount));
                 if (sellSig) {
                     logger.info("Token sold finish");
                     return true;
